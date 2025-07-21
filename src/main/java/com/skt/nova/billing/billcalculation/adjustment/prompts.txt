@@ -1,0 +1,137 @@
+adjustment 패키지에 Adjustment (조정) 도메인을 구현할거야.
+기존에 invoice 패키지 내에 구현한 것처럼 동일하게 hexagonal architecture 패턴으로 구현할거야.
+
+조정은 크게 두 가지 유형이 있어.
+1. 전조정
+- 다음달 과금 전에 미리 조정할 항목과 금액을 넣어두면, 과금 시 적용되는 유형 
+2. 후조정
+- 과금이 완료된 대상에 대해 조정할 항목과 금액을 입력하면, 그 과금 데이터에 바로 적용되는 유형
+
+4. 조정 테이블 레이아웃
+a. PK
+- serviceManagementNumber (number 10)
+- adjustmentDate(date)
+- revenueItemCode (varchar 7)
+- adjustmentSequence (number 3)
+
+b. 일반 컬럼
+- adjustmentRequestAmount(number 15)
+- adjustmentType(varchar 1)
+- adjustmentStatusCode(varchar 2)
+- adjustmentRequestDateTime(timestamp)
+- adjustmentReasonCode(varchar 4) enum값으로 관리 예정. 일단은 두 개만 만들어줘. (1000 : 과금 오류. 9999 : 기타)
+- adjustmentReasonPhrase(varchar 100)
+- adjustmentApproveRequestUserId(varchar 10)
+- adjustmentApproveUserId(varchar 10)
+- adjustmentApprovedDateTime(timestamp)
+
+3. enum
+앞에서부터 enum code값, db에 저장될 값, 내용이야.
+- adjustmentType(varchar 1)
+  BEFORE_ADJUSTMENT,B,전조정
+  AFTER_ADJUSTMENT,A,후조정
+- adjustmentStatusCode(varchar 2)
+  APPROVE,AP,승인
+  COMPLETED,BL,완료,
+  APPROVE_REQUEST,PD,승인요청
+  CANCEL,CN,취소
+
+일단 여기까지 domain, jpa entity, repository를 만들어주고, service, adaptor는 껍데기만 만들어줘. 단위테스트는 아직 만들지 말아줘.
+
+----------------
+
+
+이번에는 후조정 요청 API를 구현할거야.
+
+1. 후조정 API
+- `AdjustmentCommandPort` 인터페이스에 후조정 요청 API 추가 (`requestAfterAdjustment`) `AdjustmentService`, `AdjustmentJpaRepository`, `AdjustmentController` 까지 구현해줘.
+- 입력 : serviceManagementNumber, accountNumber, billingDate, adjustmentRequestUserId, adjustmentRequestDateTime, adjustmentReasonCode, adjustmentReasonPhrase, array( revenueItemCode, adjustmentRequestAmount )
+- 출력 : 승인/승인 요청 결과
+
+2. 조정 권한 체크 API
+- 입력 : `adjustmentRequestUserId`, `adjustmentRequestAmount`
+- 출력 : 승인/승인 요청 결과
+- AdjustmentAuthorizationService 클래스를 만들어서 구현해줘. 메소드명은 checkAdjustmentAuthorization 이야.
+- 별도 도메인의 API야. adjustmentauthorization 패키지를 만들어서 Port만 구현해줘
+
+3. 승인 요청 API
+- 입력 : adjustmentRequestUserId, adjustmentRequestAmount
+- 출력 : 승인요청ID (decimal 10)- 
+- 별도 도메인의 API야. request 패키지를 만들어서 Port만 구현해줘
+
+4. 후조정 API 비즈니스 로직
+a. 조정 권한 체크. 조정 권한 체크 api 입력의 adjustmentRequestAmount는 후조정 api의 입력으로 들어온 adjustmentRequestAmount의 총합이야.
+b. a의 결과가 '승인 요청'이면 request패키지의 승인 요청 API 호출. adjustment domain의 adjustmentStatusCode는 APPROVE_REQUEST 로 넣어줘.
+c. a의 결과가 '승인'이면 adjustment domain의 adjustmentStatusCode는 APPORVE 로 넣어줘. 승인 후에는 invoice 패키지의 과금 조정 API를 호출할거야.
+일단 invoiceCommandPort 인터페이스에 과금 조정 API 껍데기만 추가해줘. 나중에 구현할거야.
+
+
+
+------------------
+
+1. 모든 도메인이 같이 쓸수 있게 common/exception 패키지에 BusinessException 클래스를 만들어줘.
+2. Adjustment와 AdjustmentJpaEntity간 mapper를 기존에 invoice package에 구현했던 패턴대로 만들어주고 adjustmentJpaRepository에 저장까지 해줘.
+3. invoiceCommandPort의 applyAdjustment의 입력으로 넘겨줄 데이터는 아래와 같아. 이 값들이 들어가게 dto를 만들어주고, invoiceService에 구현까지 할거야.
+- serviceManagementNumber, accountNumber, billingDate, list[revenueItemCode, adjustmentRequestAmount]
+4. invoiceService의 applyAdjustment 메소드의 로직은 아래와 같아.
+- 데이터 조회 : 입력으로 들어온 serviceManagementNumber, accountNumber, billingDate에 해당되는 invoiceMaster/invoiceDetail을 조회해. InvoiceJpaRepository의 findByID를 사용해.
+- 총금액 체크 : invoiceMaster의 unpaidAmount와 입력으로 들어온 adjustmentRequestAmount의 합계를 합한 값이 음수이면 BusinessException을 던져. 예외 문구는 알아서 만들어줘.
+- 매출항목 체크 : 입력으로 받은 revenueItemCode가 invoiceDetail에 있는지 체크할거야.
+  invoiceDetail의 revenueItemCode와 일치하고 BillingClassificationCode가 INVOICE인게 있어야 해. 
+  1) 입력의 adjustmentRequestAmount가 양수이면 invoiceDetail의 unpaidAmount의 정합성은 체크하지 않아.
+  2) 입력의 adjustmentRequestAmount가 음수이고 invoiceDetail의 unpaidAmount가 음수이면 정합성은 체크하지 않아.
+  3) 입력의 adjustmentRequestAmount가 음수이고 invoiceDetail의 unpaidAmount가 양수이면 두 값의 합이 음수이면 BusinessException을 던져. 예외 문구는 알아서 만들어줘.
+  
+- 조정 적용
+  1) 입력의 adjustmentRequestAmount를 invoiceDetail의 unpaidAmount에 더해줘.
+  2) invoiceDetail을 copy하여 invoiceMaster에 insert해줘. 
+     invoiceDetail의 billingAmount는 입력의 adjustmentRequestAmount으로 넣어줘. 
+     invoiceDetail의 unpaidAmount는 0으로 넣어줘. 
+     invoiceDetail의 billingClassificationCode는 AFTER_ADJUSTMENT로 넣어줘.
+  3) invoiceMaster의 값을 갱신해줘.
+     adjustmentAmount는 invoiceDetail에서 billingClassificationCode가 AFTER_ADJUSTMENT, BEFORE_ADJUSTMENT인 레코드의 billingAmount의 합계로 넣어줘.
+     unpaidAmount는 invoiceDetail의 unpaidAmount합계로 넣어줘.
+     unpaidAmount가 0이고 unpaidStatusCode가 OPEN이면 CLOSED로 넣어줘.
+
+위 로직들을 InvoiceMaster, InvoiceDetail 도메인 로직으로 넣어줘.
+
+-------------------
+
+후조정 api 끝에 별도 MSA로 구성되어 있는 VocSystem에 Voc처리상태를 업데이트 요청 API를 추가할거야.
+hexagonal architecture 패턴에 맞게 VocSystem과 연동할 Port를 만들어주고, Adapter는 그냥 바로 return 되게 해줘.
+입력은 vocid, 상태코드야.
+Rest API 호출 방식으로 구현할건데, DB트랜잭션 진행 중에 이를 보내면 안될 것 같아. 그래서 우리 시스템 트랜잭션이 완료되면 보내고 싶어.
+아래처럼 진행할거야.
+1. AdjustmentService의 requestAfterAdjustment 메소드를 신규 클래스에 옮겨줘.
+2. AdjustmentService의 requestAfterAdjustment에서는 1에서 만든 신규 클래스의 메소드를 호출하고, voc시스템과 port로 인터페이스해줘.
+
+
+--------------------
+
+첫번째로, 승인 요청 상태인 조정 내역을 승인자가 승인했을 때의 시나리오를 구현할거야.
+1. api입력은 adjustmentRequestId, adjustmentApproveUserId, adjustmentApprovedDateTime이야.
+2. 입력으로 들어온 승인ID로 Adjustment 조회. adjustmentStatusCode가 '승인요청'이 아니면 예외 던짐 
+3. 조회된 Adjustment들의 adjustmentStatusCode = '승인'으로 변경하고, adjustmentApproveUserId, adjustmentApprovedDateTime에 입력으로 받은 값을 채워줘.
+4. invoice 패키지의 invoiceUseCase의 applyAdjustment를 호출해줘
+
+---
+
+두번째로, 승인 요청 상태인 조정 내역을 승인자가 반려했을 때의 시나리오를 구현할거야.
+1. api입력은 adjustmentRequestId, adjustmentRejectUserId, adjustmentRejectedDateTime야.
+2. 입력으로 들어온 승인ID로 Adjustment 조회. adjustmentStatusCode가 '승인요청'이 아니면 예외 던짐 
+3. 조회된 Adjustment들의 adjustmentStatusCode = '반려'로 변경하고, domain의 adjustmentApproveUserId에 입력의 adjustmentRejectUserId를, domain의 adjustmentApprovedDateTime에 입력의 adjustmentRejectedDateTime를 넣어줘.
+
+---
+
+세번째로, 승인 상태인 조정 내역을 취소했을 때의 시나리오를 구현할거야. 두 가지 채널로 들어올 수 있어. 별도 API로 만들거지만 로직은 동일해.
+1) 승인자 없이 완료한 뒤 취소하는 경우. 2) 승인자가 승인한 후에 취소하는 경우
+처리 로직은 동일해. 다만 Adjustment를 찾아오는 로직만 달라.
+- 승인자 없이 완료한 뒤 취소하는 경우에는 Adjustment를 찾아올 때 입력으로 serviceManagementNumber, accountNumber, adjustmentRequestDateTime을 넣어줄거고 이를 조건으로 주고 조회할거야.
+- 승인자가 승인한 후에 취소하는 경우에는 Adjustment를 찾아올 때 입력으로 adjustmentApporveUserId을 넣어줄거고 이를 조건으로 주고 조회할거야.
+
+1. 조회된 Adjustment중 하나라도 adjustmentStatusCode가 '승인'이 아니면 예외 던짐
+2. 조회된 Adjustment들의 adjustmentStatusCode = '취소'로 변경
+3. invoiceCommandPort에 조정취소반영 api를 만들거야. applyAdjustment와 정확히 반대로 동작해.
+ - invoiceDetail에서 billingClassificationCode가 INVOICE인 대상의 unpaidAmount에 adjustmentRequestAmount를 더함
+ - invoiceDetail에서 billingClassificationCode가 AFTER_ADJUSTMENT인 대상의 billingAmount에 adjustmentRequestAmount*(-1)한 값을 더함
+ - invoiceMaster의 adjustmentAmount와 unpaidStatusCode 변경

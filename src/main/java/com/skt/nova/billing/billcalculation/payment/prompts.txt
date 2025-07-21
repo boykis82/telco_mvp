@@ -1,0 +1,95 @@
+payment 패키지에 수납 기능을 개발할거야. 먼저 API 껍데기와 Jpa Entity, Jpa Repository와 이에 대응되는 domain class까지 만들어보자.
+
+1. API
+- 입력 : accountNumber, 수납금액, 수납일시
+- 출력 : [acconutNumber, serviceManagementNumber, billingDate, paymentAmount] 의 list
+
+---
+
+2. 데이터모델
+a. PaymentMaster
+| java 변수명 | java type | 자리수 | 설명 |
+|---|---|---|---|
+| accountNumber | String | 10 | 수납된 account number |
+| serviceManagementNumber | String | 10 | 수납된 serviceManagementNumber |
+| paymentDateTime | LocalDateTime | n/a | 수납 처리 일시 |
+| paymentClassificationCode | Enum | n/a | 수납 구분 코드 |
+| paymentAmount | BigDecimal | 15 | 수납금액 |
+
+위 내용을 기반으로 Jpa Entity를 만들어주고, 테이블 컬럼명은 알아서 만들어줘.
+혹시 변수명이 문법에 맞지 않다면 그에 맞게 수정해줘.
+
+paymentClassificationCode enum값은 아래와 같아
+| enum code | db에 저장될 값 | enum description |
+|---|---|---|
+| PAYMENT | 1 | 수납 |
+| REFUND | 5 | 환불 |
+
+b. PaymentDetail
+| java 변수명 | java type | 자리수 | 설명 |
+|---|---|---|---|
+| accountNumber | String | 10 | 수납된 account number |
+| serviceManagementNumber | String | 10 | 수납된 serviceManagementNumber |
+| paymentDateTime | LocalDateTime | n/a | 수납 처리 일시 |
+| revenueItemCode | String | 7 | 수납된 매출 항목 코드(invoiceDetail의 revenueItemCode) |
+| billingSequence | Long | 3 | 수납된 매출 항목 코드의 순번(invoiceDetail의 billingSequence) |
+| paymentAmount | BigDecimal | 15 | 수납금액 |
+
+위 내용을 기반으로 Jpa Entity를 만들어주고, 테이블 컬럼명은 알아서 만들어줘.
+혹시 변수명이 문법에 맞지 않다면 그에 맞게 수정해줘.
+
+PaymentMaster와 PaymentDetail은 1:n관계야. jpa entity, domain 모두 하나의 aggregate인 것처럼 동작하게 만들어줘
+
+3. JpaRepository와 PaymentRepositoryAdaptor
+기존에 만들었던 invoice, adjustment 패키지와 동일한 패턴으로 만들어줘.
+만들어야 하는 기능은 아래 세 개야.
+a. save
+b. saveAll
+c. accountNumber 단위로 수납 내역 조회
+- 조회조건 : accountNumber로 조회
+- 조회로직 : paymentDateTime, paymentClassificationCode으로 group by sum하여 조회하고 paymentDateTime 내림차순으로 조회
+- 결과값 : accounbNumber, LocalDateTime, paymentClassificationCode, sum of paymentAmount
+
+
+--------------------------------------------------------------------------------------------------------
+
+이제 수납 API의 내부 구현을 해볼거야.
+`PaymentUseCase.processPayment` method의 비즈니스 로직은 아래와 같아.
+
+1. invoiceCommandPort의 applyPayment롤 호출하고 결과값을 받아옴
+2. 이 결과값을 PaymentMaster, PaymentDetail에 적용
+3. 결과 리턴
+
+각 step별로 아래 내용에서 상세히 요청할께. 
+기존에 만들어뒀던 로직을 지우지 마.
+
+---
+
+invoice Package에 구현할 내용이야.
+1. invoiceCommandPort를 구현한 invoiceUseCase의 applyPayment method 구현
+a. 입력은 `accountNumber`, `paymentAmount`야. 입력값이 추가될 여지가 크므로 값들을 묶어서 DTO로 만들어줘.
+
+b. `InvoiceRepositoryPort`에 새로운 메소드를 정의하고 `InvoiceRepositoryAdapter`에 구현할거야. 
+입력으로 들어온 `accountNumber`에 해당하는 `invoiceMaster`들을 조회해.
+`unpaidAmount`가 0을 초과해야 하고, 조회 순서는 `invoiceMaster`의 `billingDate` 오름차순, `serviceManagementNumber` 오름차순이야.
+위 조회 로직을 기존처럼 QueryDSL기반으로 구현해줘.
+
+c. 조회된 invoiceMaster에 순서대로 수납금액을 적용해.
+  적용 후 금액이 남으면 다음 invoiceMaster에 적용해. 금액이 모두 소진될때 까지 반복하는거야.
+  이를 위해 invoiceMaster에 applyPayment 메소드를 만들거야.
+  리턴 값은 [acconutNumber, serviceManagementNumber, billingDate, revenueItemCode, paymentAmount]의 list야.
+  applyPayment의 상세로직은 아래에서 언급할께.
+
+d. invoiceMaster의 applyPayment 메소드에 대해 설명할께.
+- 입력의 paymentAmount가 invoiceMaster의 unpaidAmount보다 같거나 큰 경우
+  이 경우는 invoiceMaster의 한방에 수납여부(새로 추가해야함)을 true로 넣어줘. (default값은 false야)
+  리턴값은 invoiceDetail의 [revenueItemCode, billingAmount] list를 copy(이를 위한 class를 만들어야 함)해서 리턴하면 돼. 
+
+- 입력의 paymentAmount가 invoiceMaster의 unpaidAmount보다 작은 경우
+부분납이 발생하는 케이스야. 이 경우는 invoiceMaster의 한방에 수납여부를 false로 넣어줘.
+  invoiceDetail에서 billingClassificationCode가 INVOICE인 대상의 unpaidAmount를 차례대로 차감해야 해. 
+  순서는 unpaidAmount가 음수인 것부터 처리하고, 그 후에는 revenueItemCode 순으로 해줘.
+  그리고 수납 처리된 결과를 [revenueItemCode, billingAmount] list로 리턴해줘.
+
+일단 여기까지 구현해줘.
+
