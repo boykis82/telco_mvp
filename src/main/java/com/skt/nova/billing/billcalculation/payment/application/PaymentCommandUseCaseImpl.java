@@ -7,17 +7,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.skt.nova.billing.billcalculation.invoice.application.ApplyPaymentResultDto;
-import com.skt.nova.billing.billcalculation.payment.api.PaymentCommandPort;
-import com.skt.nova.billing.billcalculation.payment.api.PaymentQueryPort;
+import com.skt.nova.billing.billcalculation.payment.api.PaymentCommandUseCase;
 import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentRequestDto;
 import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentResponseDto;
-import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentSummaryDto;
 import com.skt.nova.billing.billcalculation.payment.api.dto.RefundRequestDto;
 import com.skt.nova.billing.billcalculation.payment.domain.PaymentClassificationCode;
 import com.skt.nova.billing.billcalculation.payment.domain.PaymentDetail;
 import com.skt.nova.billing.billcalculation.payment.domain.PaymentMaster;
 import com.skt.nova.billing.billcalculation.payment.port.out.InvoiceClientPort;
-import com.skt.nova.billing.billcalculation.payment.port.out.PaymentRepositoryPort;
+import com.skt.nova.billing.billcalculation.payment.port.out.PaymentCommandRepositoryPort;
 
 import lombok.RequiredArgsConstructor;
 
@@ -27,16 +25,10 @@ import lombok.RequiredArgsConstructor;
  */
 @Service
 @RequiredArgsConstructor
-public class PaymentUseCase implements PaymentCommandPort, PaymentQueryPort {
+public class PaymentCommandUseCaseImpl implements PaymentCommandUseCase {
 
     private final InvoiceClientPort invoiceClientPort;
-    private final PaymentRepositoryPort paymentRepositoryPort;
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<PaymentSummaryDto> findPaymentSummaryByAccountNumber(String accountNumber) {
-        return paymentRepositoryPort.findPaymentSummaryByAccountNumber(accountNumber);
-    }
+    private final PaymentCommandRepositoryPort paymentCommandRepositoryPort;
 
     @Override
     @Transactional
@@ -53,7 +45,7 @@ public class PaymentUseCase implements PaymentCommandPort, PaymentQueryPort {
                 List<PaymentDetail> paymentDetails = createPaymentDetails(paymentRequestDto, applyPaymentResultDto);
                 paymentMaster.addPaymentDetails(paymentDetails);
             }
-            paymentRepositoryPort.save(paymentMaster);
+            paymentCommandRepositoryPort.save(paymentMaster);
         }
         return toPaymentResponseDtos(applyPaymentResultDtos);
     }

@@ -10,7 +10,7 @@ import java.util.List;
  * 요금 정보 관리 Command Port 인터페이스
  * 요금 정보 생성, 수정, 삭제 등의 명령 작업을 정의합니다.
  */
-public interface InvoiceCommandPort {
+public interface InvoiceCommandUseCase {
     // 요금 정보 관련 명령 작업 메서드들이 정의될 예정
 
     void applyAdjustment(ApplyAdjustmentRequestDto applyAdjustmentRequestDto);

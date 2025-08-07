@@ -1,30 +1,22 @@
 package com.skt.nova.billing.billcalculation.adjustment.adapter.out;
 
+import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
+import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentDomainEntityMapper;
+import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentJpaEntity;
+import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentJpaRepository;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentQueryRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.stereotype.Component;
-
-import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
-import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentJpaEntity;
-import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentJpaRepository;
-import com.skt.nova.billing.billcalculation.adjustment.infrastructure.AdjustmentDomainEntityMapper;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentRepositoryPort;
-
-import lombok.RequiredArgsConstructor;
-
 @Component
 @RequiredArgsConstructor
-public class AdjustmentRepositoryAdapter implements AdjustmentRepositoryPort {
+public class AdjustmentQueryRepositoryAdapter implements AdjustmentQueryRepositoryPort {
     private final AdjustmentJpaRepository adjustmentJpaRepository;
     private final AdjustmentDomainEntityMapper adjustmentMapper;
-
-    @Override
-    public void saveAll(List<Adjustment> adjustments) {
-        List<AdjustmentJpaEntity> entities = adjustments.stream().map(adjustmentMapper::mapToJpaEntity).collect(Collectors.toList());
-        adjustmentJpaRepository.saveAll(entities);
-    }
 
     @Override
     public List<Adjustment> findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(String serviceManagementNumber) {

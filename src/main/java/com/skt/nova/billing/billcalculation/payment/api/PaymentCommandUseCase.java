@@ -10,7 +10,7 @@ import java.util.List;
  * 수납 관리 Command Port 인터페이스
  * 수납 생성, 수정, 삭제 등의 명령 작업을 정의합니다.
  */
-public interface PaymentCommandPort {
+public interface PaymentCommandUseCase {
     
     /**
      * 수납 처리

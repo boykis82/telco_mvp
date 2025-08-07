@@ -1,8 +1,7 @@
 package com.skt.nova.billing.billcalculation.invoice.application;
 
 import com.skt.nova.billing.billcalculation.common.exception.BusinessException;
-import com.skt.nova.billing.billcalculation.invoice.api.InvoiceCommandPort;
-import com.skt.nova.billing.billcalculation.invoice.api.InvoiceQueryPort;
+import com.skt.nova.billing.billcalculation.invoice.api.InvoiceCommandUseCase;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.ApplyAdjustmentRequestDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.ApplyPaymentDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceMasterDto;
@@ -10,7 +9,8 @@ import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceSummaryDto;
 import com.skt.nova.billing.billcalculation.invoice.domain.InvoiceMaster;
 import com.skt.nova.billing.billcalculation.invoice.domain.AdjustmentItem;
 import com.skt.nova.billing.billcalculation.invoice.domain.ApplyPaymentResult;
-import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceRepositoryPort;
+import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceCommandRepositoryPort;
+import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceQueryRepositoryPort;
 import com.skt.nova.billing.billcalculation.invoice.infrastructure.InvoiceMasterId;
 
 import lombok.RequiredArgsConstructor;
@@ -25,10 +25,10 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class InvoiceUseCase implements InvoiceQueryPort, InvoiceCommandPort {
+public class InvoiceCommandUseCaseImpl implements InvoiceCommandUseCase {
 
-    private final InvoiceRepositoryPort invoiceRepositoryPort;
-    private final InvoiceMapper invoiceMapper;
+    private final InvoiceCommandRepositoryPort invoiceCommandRepositoryPort;
+    private final InvoiceQueryRepositoryPort invoiceQueryRepositoryPort;
 
     @Transactional
     @Override
@@ -38,7 +38,7 @@ public class InvoiceUseCase implements InvoiceQueryPort, InvoiceCommandPort {
                 LocalDate.parse(dto.getBillingDate()),
                 dto.getServiceManagementNumber()
         );
-        InvoiceMaster domain = invoiceRepositoryPort.findById(id)
+        InvoiceMaster domain = invoiceQueryRepositoryPort.findById(id)
                 .orElseThrow(() -> new BusinessException("청구 정보를 찾을 수 없습니다."));
         
         // DTO를 도메인 값 객체로 변환
@@ -50,7 +50,7 @@ public class InvoiceUseCase implements InvoiceQueryPort, InvoiceCommandPort {
                 .collect(Collectors.toList());
         
         domain.applyAdjustment(adjustmentItems);
-        invoiceRepositoryPort.save(domain);
+        invoiceCommandRepositoryPort.save(domain);
     }
     
     @Transactional
@@ -61,7 +61,7 @@ public class InvoiceUseCase implements InvoiceQueryPort, InvoiceCommandPort {
                 LocalDate.parse(dto.getBillingDate()),
                 dto.getServiceManagementNumber()
         );
-        InvoiceMaster domain = invoiceRepositoryPort.findById(id)
+        InvoiceMaster domain = invoiceQueryRepositoryPort.findById(id)
                 .orElseThrow(() -> new BusinessException("청구 정보를 찾을 수 없습니다."));
         
         // DTO를 도메인 값 객체로 변환
@@ -73,29 +73,14 @@ public class InvoiceUseCase implements InvoiceQueryPort, InvoiceCommandPort {
                 .collect(Collectors.toList());
         
         domain.cancelAdjustment(adjustmentItems);
-        invoiceRepositoryPort.save(domain);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InvoiceSummaryDto> findInvoiceSummaryByAccountNumber(String accountNumber) {
-        return invoiceRepositoryPort.findInvoiceSummaryByAccountNumber(accountNumber);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<InvoiceMasterDto> findInvoicesByAccountNumberAndBillingDate(String accountNumber, LocalDate billingDate) {
-        List<InvoiceMaster> invoices = invoiceRepositoryPort.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate);
-        return invoices.stream()
-                .map(invoiceMapper::mapToDto)
-                .collect(Collectors.toList());
+        invoiceCommandRepositoryPort.save(domain);
     }
 
     @Override
     @Transactional
     public List<ApplyPaymentResultDto> applyPayment(ApplyPaymentDto applyPaymentDto) {
         List<ApplyPaymentResultDto> results = new ArrayList<>();
-        List<InvoiceMaster> invoices = invoiceRepositoryPort.findUnpaidInvoiceMastersByAccountNumber(applyPaymentDto.accountNumber());
+        List<InvoiceMaster> invoices = invoiceQueryRepositoryPort.findUnpaidInvoiceMastersByAccountNumber(applyPaymentDto.accountNumber());
 
         BigDecimal remainingAmount = applyPaymentDto.paymentAmount();
 

@@ -1,12 +1,15 @@
 package com.skt.nova.billing.billcalculation.invoice.application;
 
 import com.skt.nova.billing.billcalculation.common.exception.BusinessException;
+import com.skt.nova.billing.billcalculation.invoice.api.InvoiceCommandUseCase;
+import com.skt.nova.billing.billcalculation.invoice.api.InvoiceQueryUseCase;
 import com.skt.nova.billing.billcalculation.invoice.domain.InvoiceMaster;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.AdjustmentItemDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.ApplyAdjustmentRequestDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceMasterDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceSummaryDto;
-import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceRepositoryPort;
+import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceCommandRepositoryPort;
+import com.skt.nova.billing.billcalculation.invoice.port.out.InvoiceQueryRepositoryPort;
 import com.skt.nova.billing.billcalculation.invoice.infrastructure.InvoiceMasterId;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -30,15 +33,19 @@ import static org.mockito.Mockito.when;
 class InvoiceServiceTest {
     
     @Mock
-    private InvoiceRepositoryPort invoiceRepositoryPort;
+    private InvoiceCommandRepositoryPort invoiceCommandRepositoryPort;
+    @Mock
+    private InvoiceQueryRepositoryPort invoiceQueryRepositoryPort;
     
-    private InvoiceUseCase invoiceService;
+    private InvoiceCommandUseCase invoiceCommandUseCase;
+    private InvoiceQueryUseCase invoiceQueryUseCase;
 
     private InvoiceMapper invoiceMapper = new InvoiceMapper();
     
     @BeforeEach
     void setUp() {
-        invoiceService = new InvoiceUseCase(invoiceRepositoryPort, invoiceMapper);
+        invoiceCommandUseCase = new InvoiceCommandUseCaseImpl(invoiceCommandRepositoryPort, invoiceQueryRepositoryPort);
+        invoiceQueryUseCase = new InvoiceQueryUseCaseImpl(invoiceQueryRepositoryPort, invoiceMapper);
     }
     
     @Test
@@ -63,14 +70,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when
-        invoiceService.applyAdjustment(requestDto);
+        invoiceCommandUseCase.applyAdjustment(requestDto);
         
         // then
-        verify(invoiceRepositoryPort).findById(id);
-        verify(invoiceRepositoryPort).save(any(InvoiceMaster.class));
+        verify(invoiceQueryRepositoryPort).findById(id);
+        verify(invoiceCommandRepositoryPort).save(any(InvoiceMaster.class));
     }
     
     @Test
@@ -94,14 +101,14 @@ class InvoiceServiceTest {
         
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.empty());
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.empty());
         
         // when & then
-        assertThatThrownBy(() -> invoiceService.applyAdjustment(requestDto))
+        assertThatThrownBy(() -> invoiceCommandUseCase.applyAdjustment(requestDto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("청구 정보를 찾을 수 없습니다.");
         
-        verify(invoiceRepositoryPort).findById(id);
+        verify(invoiceQueryRepositoryPort).findById(id);
     }
     
     @Test
@@ -126,14 +133,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when & then
-        assertThatThrownBy(() -> invoiceService.applyAdjustment(requestDto))
+        assertThatThrownBy(() -> invoiceCommandUseCase.applyAdjustment(requestDto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("총 조정 금액이 미납 금액보다 커서 전체 미납액을 음수로 만들 수 없습니다.");
         
-        verify(invoiceRepositoryPort).findById(id);
+        verify(invoiceQueryRepositoryPort).findById(id);
     }
     
     @Test
@@ -158,14 +165,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when & then
-        assertThatThrownBy(() -> invoiceService.applyAdjustment(requestDto))
+        assertThatThrownBy(() -> invoiceCommandUseCase.applyAdjustment(requestDto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("조정 대상 매출 항목(NONEXISTENT)이 존재하지 않습니다.");
         
-        verify(invoiceRepositoryPort).findById(id);
+        verify(invoiceQueryRepositoryPort).findById(id);
     }
     
     @Test
@@ -190,14 +197,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when & then
-        assertThatThrownBy(() -> invoiceService.applyAdjustment(requestDto))
+        assertThatThrownBy(() -> invoiceCommandUseCase.applyAdjustment(requestDto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("조정 금액(-3000)이 미납 금액(2000)보다 커서 미납액을 음수로 만들 수 없습니다.");
         
-        verify(invoiceRepositoryPort).findById(id);
+        verify(invoiceQueryRepositoryPort).findById(id);
     }
     
     @Test
@@ -222,14 +229,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when
-        invoiceService.applyAdjustment(requestDto);
+        invoiceCommandUseCase.applyAdjustment(requestDto);
         
         // then
-        verify(invoiceRepositoryPort).findById(id);
-        verify(invoiceRepositoryPort).save(any(InvoiceMaster.class));
+        verify(invoiceQueryRepositoryPort).findById(id);
+        verify(invoiceCommandRepositoryPort).save(any(InvoiceMaster.class));
     }
     
     @Test
@@ -258,14 +265,14 @@ class InvoiceServiceTest {
         InvoiceMasterId id = new InvoiceMasterId(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         InvoiceMaster mockInvoiceMaster = InvoiceTestFixture.createMockInvoiceMasterWithMultipleDetails(accountNumber, LocalDate.parse(billingDate), serviceManagementNumber);
         
-        when(invoiceRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
+        when(invoiceQueryRepositoryPort.findById(id)).thenReturn(Optional.of(mockInvoiceMaster));
         
         // when
-        invoiceService.applyAdjustment(requestDto);
+        invoiceCommandUseCase.applyAdjustment(requestDto);
         
         // then
-        verify(invoiceRepositoryPort).findById(id);
-        verify(invoiceRepositoryPort).save(any(InvoiceMaster.class));
+        verify(invoiceQueryRepositoryPort).findById(id);
+        verify(invoiceCommandRepositoryPort).save(any(InvoiceMaster.class));
     }
     
     @Test
@@ -273,10 +280,10 @@ class InvoiceServiceTest {
         // given
         String accountNumber = "1234567890";
         List<InvoiceSummaryDto> expectedSummaries = InvoiceTestFixture.createMockSummaries(accountNumber);
-        when(invoiceRepositoryPort.findInvoiceSummaryByAccountNumber(accountNumber)).thenReturn(expectedSummaries);
+        when(invoiceQueryRepositoryPort.findInvoiceSummaryByAccountNumber(accountNumber)).thenReturn(expectedSummaries);
         
         // when
-        List<InvoiceSummaryDto> result = invoiceService.findInvoiceSummaryByAccountNumber(accountNumber);
+        List<InvoiceSummaryDto> result = invoiceQueryUseCase.findInvoiceSummaryByAccountNumber(accountNumber);
         
         // then
         assertThat(result).isEqualTo(expectedSummaries);
@@ -289,11 +296,11 @@ class InvoiceServiceTest {
         String accountNumber = "1234567890";
         LocalDate billingDate = LocalDate.of(2024, 1, 31);
         List<InvoiceMaster> expectedInvoices = InvoiceTestFixture.createMockInvoices(accountNumber, billingDate);
-        when(invoiceRepositoryPort.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate))
+        when(invoiceQueryRepositoryPort.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate))
                 .thenReturn(expectedInvoices);
 
         // when
-        List<InvoiceMasterDto> result = invoiceService.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate);
+        List<InvoiceMasterDto> result = invoiceQueryUseCase.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate);
 
         // then
         // InvoiceMasterDto로 변환하여 비교

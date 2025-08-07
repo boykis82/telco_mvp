@@ -1,19 +1,23 @@
 package com.skt.nova.billing.billcalculation.adjustment;
 
+import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentCommandUseCase;
+import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentQueryUseCase;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentApprovalRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentRejectionRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentCancelRequest;
-import com.skt.nova.billing.billcalculation.adjustment.application.AdjustmentUseCase;
+import com.skt.nova.billing.billcalculation.adjustment.application.AdjustmentCommandUseCaseImpl;
+import com.skt.nova.billing.billcalculation.adjustment.application.AdjustmentQueryUseCaseImpl;
 import com.skt.nova.billing.billcalculation.adjustment.application.AfterAdjustmentBusinessService;
 import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
 import com.skt.nova.billing.billcalculation.adjustment.domain.AdjustmentStatusCode;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentRepositoryPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentQueryRepositoryPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentCommandRepositoryPort;
 import com.skt.nova.billing.billcalculation.adjustment.port.out.VocSystemPort;
-import com.skt.nova.billing.billcalculation.adjustmentauthorization.api.AdjustmentAuthorizationPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentAuthorizationClientPort;
 import com.skt.nova.billing.billcalculation.adjustmentauthorization.api.AuthorizationResult;
-import com.skt.nova.billing.billcalculation.approvalrequest.api.ApprovalRequestPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.ApprovalClientPort;
 import com.skt.nova.billing.billcalculation.common.exception.BusinessException;
-import com.skt.nova.billing.billcalculation.invoice.api.InvoiceCommandPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.InvoiceClientPort;
 import com.skt.nova.billing.billcalculation.adjustment.application.AdjustmentDomainDtoMapper;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentResponse;
@@ -35,36 +39,42 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class AdjustmentUseCaseTest {
+class AdjustmentCommandUseCaseImplTest {
     @Mock
-    private AdjustmentRepositoryPort adjustmentRepositoryPort;
+    private AdjustmentQueryRepositoryPort adjustmentQueryRepositoryPort;
+    @Mock
+    private AdjustmentCommandRepositoryPort adjustmentCommandRepositoryPort;
     @Mock
     private AdjustmentDomainDtoMapper adjustmentMapper;
     @Mock
     private VocSystemPort vocSystemPort;
     @Mock
-    private AdjustmentAuthorizationPort adjustmentAuthorizationPort;
+    private AdjustmentAuthorizationClientPort adjustmentAuthorizationClientPort;
     @Mock
-    private ApprovalRequestPort approvalRequestPort;
+    private ApprovalClientPort approvalClientPort;
     @Mock
-    private InvoiceCommandPort invoiceCommandPort;
+    private InvoiceClientPort invoiceClientPort;
 
-    private AdjustmentUseCase adjustmentUseCase;
+    private AdjustmentCommandUseCase adjustmentCommandUseCase;
+    private AdjustmentQueryUseCase adjustmentQueryUseCase;
     private AfterAdjustmentBusinessService afterAdjustmentBusinessService;
 
     @BeforeEach
     void setUp() {
         afterAdjustmentBusinessService = new AfterAdjustmentBusinessService(
-                adjustmentAuthorizationPort, 
-                approvalRequestPort, 
-                invoiceCommandPort, 
-                adjustmentRepositoryPort
+                adjustmentAuthorizationClientPort, 
+                approvalClientPort, 
+                invoiceClientPort,
+                adjustmentQueryRepositoryPort,
+                adjustmentCommandRepositoryPort
         );
-        adjustmentUseCase = new AdjustmentUseCase(
-                adjustmentRepositoryPort, 
-                adjustmentMapper, 
+        adjustmentCommandUseCase = new AdjustmentCommandUseCaseImpl(
                 afterAdjustmentBusinessService, 
                 vocSystemPort
+        );
+        adjustmentQueryUseCase = new AdjustmentQueryUseCaseImpl(
+                adjustmentQueryRepositoryPort,
+                adjustmentMapper
         );
     }
 
@@ -78,15 +88,15 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createMultipleAdjustments("ADJ_REQ_001", AdjustmentStatusCode.APPROVE_REQUEST);
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
         
         // when
-        adjustmentUseCase.approveAdjustment(request);
+        adjustmentCommandUseCase.approveAdjustment(request);
         
         // then
-        verify(adjustmentRepositoryPort).findByAdjustmentRequestId("ADJ_REQ_001");
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort).applyAdjustment(any());
+        verify(adjustmentQueryRepositoryPort).findByAdjustmentRequestId("ADJ_REQ_001");
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort).applyAdjustment(any());
         verify(vocSystemPort).updateVocStatus(any());
     }
 
@@ -99,10 +109,10 @@ class AdjustmentUseCaseTest {
                 .adjustmentApprovedDateTime(LocalDateTime.now())
                 .build();
         
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(List.of());
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(List.of());
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.approveAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.approveAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("조정 내역을 찾을 수 없습니다. adjustmentRequestId: ADJ_REQ_001");
     }
@@ -117,10 +127,10 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createAdjustmentsWithMixedStatus("ADJ_REQ_001");
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.approveAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.approveAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("승인 요청 상태가 아닌 조정 내역이 포함되어 있습니다. adjustmentRequestId: ADJ_REQ_001");
     }
@@ -135,14 +145,14 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createMultipleAdjustments("ADJ_REQ_001", AdjustmentStatusCode.APPROVE_REQUEST);
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
         
         // when
-        adjustmentUseCase.rejectAdjustment(request);
+        adjustmentCommandUseCase.rejectAdjustment(request);
         
         // then
-        verify(adjustmentRepositoryPort).findByAdjustmentRequestId("ADJ_REQ_001");
-        verify(adjustmentRepositoryPort).saveAll(any());
+        verify(adjustmentQueryRepositoryPort).findByAdjustmentRequestId("ADJ_REQ_001");
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
     }
 
     @Test
@@ -154,10 +164,10 @@ class AdjustmentUseCaseTest {
                 .adjustmentRejectedDateTime(LocalDateTime.now())
                 .build();
         
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(List.of());
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(List.of());
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.rejectAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.rejectAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("조정 내역을 찾을 수 없습니다. adjustmentRequestId: ADJ_REQ_001");
     }
@@ -172,10 +182,10 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createAdjustmentsWithMixedStatus("ADJ_REQ_001");
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("ADJ_REQ_001")).thenReturn(adjustments);
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.rejectAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.rejectAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("승인 요청 상태가 아닌 조정 내역이 포함되어 있습니다. adjustmentRequestId: ADJ_REQ_001");
     }
@@ -190,17 +200,17 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createMultipleAdjustments("ADJ_REQ_001", AdjustmentStatusCode.APPROVE);
-        when(adjustmentRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
+        when(adjustmentQueryRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
                 "1234567890", "9876543210", request.getAdjustmentRequestDateTime())).thenReturn(adjustments);
         
         // when
-        adjustmentUseCase.cancelAdjustment(request);
+        adjustmentCommandUseCase.cancelAdjustment(request);
         
         // then
-        verify(adjustmentRepositoryPort).findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
+        verify(adjustmentQueryRepositoryPort).findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
                 "1234567890", "9876543210", request.getAdjustmentRequestDateTime());
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort).cancelAdjustment(any());
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort).cancelAdjustment(any());
     }
 
     @Test
@@ -211,15 +221,15 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createMultipleAdjustments("ADJ_REQ_001", AdjustmentStatusCode.APPROVE);
-        when(adjustmentRepositoryPort.findByAdjustmentRequestId("REQ_ID")).thenReturn(adjustments);
+        when(adjustmentQueryRepositoryPort.findByAdjustmentRequestId("REQ_ID")).thenReturn(adjustments);
         
         // when
-        adjustmentUseCase.cancelAdjustment(request);
+        adjustmentCommandUseCase.cancelAdjustment(request);
         
         // then
-        verify(adjustmentRepositoryPort).findByAdjustmentRequestId("REQ_ID");
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort).cancelAdjustment(any());
+        verify(adjustmentQueryRepositoryPort).findByAdjustmentRequestId("REQ_ID");
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort).cancelAdjustment(any());
     }
 
     @Test
@@ -231,11 +241,11 @@ class AdjustmentUseCaseTest {
                 .adjustmentRequestDateTime(LocalDateTime.now())
                 .build();
         
-        when(adjustmentRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
+        when(adjustmentQueryRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
                 any(), any(), any())).thenReturn(List.of());
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.cancelAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.cancelAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("조정 내역을 찾을 수 없습니다.");
     }
@@ -250,11 +260,11 @@ class AdjustmentUseCaseTest {
                 .build();
         
         List<Adjustment> adjustments = AdjustmentTestFixture.createAdjustmentsWithMixedStatus("ADJ_REQ_001");
-        when(adjustmentRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
+        when(adjustmentQueryRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
                 any(), any(), any())).thenReturn(adjustments);
         
         // when & then
-        assertThatThrownBy(() -> adjustmentUseCase.cancelAdjustment(request))
+        assertThatThrownBy(() -> adjustmentCommandUseCase.cancelAdjustment(request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("승인 상태가 아닌 조정 내역이 포함되어 있습니다.");
     }
@@ -277,16 +287,16 @@ class AdjustmentUseCaseTest {
         request.setItems(List.of(item));
         
         // 권한 체크에서 승인 가능한 경우로 설정
-        when(adjustmentAuthorizationPort.checkAdjustmentAuthorization("REQUEST_USER", -1000L))
+        when(adjustmentAuthorizationClientPort.checkAdjustmentAuthorization("REQUEST_USER", -1000L))
                 .thenReturn(AuthorizationResult.APPROVE);
         
         // when
-        AfterAdjustmentResponse response = adjustmentUseCase.requestAfterAdjustment(request);
+        AfterAdjustmentResponse response = adjustmentCommandUseCase.requestAfterAdjustment(request);
         
         // then
-        verify(adjustmentAuthorizationPort).checkAdjustmentAuthorization("REQUEST_USER", -1000L);
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort).applyAdjustment(any());
+        verify(adjustmentAuthorizationClientPort).checkAdjustmentAuthorization("REQUEST_USER", -1000L);
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort).applyAdjustment(any());
         verify(vocSystemPort).updateVocStatus(any());
         
         assertThat(response.getStatus()).isEqualTo("APPROVE");
@@ -311,19 +321,19 @@ class AdjustmentUseCaseTest {
         request.setItems(List.of(item));
         
         // 권한 체크에서 승인 요청이 필요한 경우로 설정
-        when(adjustmentAuthorizationPort.checkAdjustmentAuthorization("REQUEST_USER", -10000L))
+        when(adjustmentAuthorizationClientPort.checkAdjustmentAuthorization("REQUEST_USER", -10000L))
                 .thenReturn(AuthorizationResult.REQUEST_APPROVAL);
-        when(approvalRequestPort.requestApproval("REQUEST_USER", -10000L))
+        when(approvalClientPort.requestApproval("REQUEST_USER", -10000L))
                 .thenReturn("APPROVAL_REQ_001");
         
         // when
-        AfterAdjustmentResponse response = adjustmentUseCase.requestAfterAdjustment(request);
+        AfterAdjustmentResponse response = adjustmentCommandUseCase.requestAfterAdjustment(request);
         
         // then
-        verify(adjustmentAuthorizationPort).checkAdjustmentAuthorization("REQUEST_USER", -10000L);
-        verify(approvalRequestPort).requestApproval("REQUEST_USER", -10000L);
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort, never()).applyAdjustment(any());
+        verify(adjustmentAuthorizationClientPort).checkAdjustmentAuthorization("REQUEST_USER", -10000L);
+        verify(approvalClientPort).requestApproval("REQUEST_USER", -10000L);
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort, never()).applyAdjustment(any());
         verify(vocSystemPort, never()).updateVocStatus(any());
         
         assertThat(response.getStatus()).isEqualTo("APPROVE_REQUEST");
@@ -347,15 +357,15 @@ class AdjustmentUseCaseTest {
         item.setAdjustmentRequestAmount(-1000L);
         request.setItems(List.of(item));
         
-        when(adjustmentAuthorizationPort.checkAdjustmentAuthorization("REQUEST_USER", -1000L))
+        when(adjustmentAuthorizationClientPort.checkAdjustmentAuthorization("REQUEST_USER", -1000L))
                 .thenReturn(AuthorizationResult.APPROVE);
         doThrow(new RuntimeException("VocSystem 연동 실패")).when(vocSystemPort).updateVocStatus(any());
         
         // when & then - VocSystem 연동 실패는 예외를 전파하지 않아야 함
-        AfterAdjustmentResponse response = adjustmentUseCase.requestAfterAdjustment(request);
+        AfterAdjustmentResponse response = adjustmentCommandUseCase.requestAfterAdjustment(request);
         
-        verify(adjustmentRepositoryPort).saveAll(any());
-        verify(invoiceCommandPort).applyAdjustment(any());
+        verify(adjustmentCommandRepositoryPort).saveAll(any());
+        verify(invoiceClientPort).applyAdjustment(any());
         verify(vocSystemPort).updateVocStatus(any());
         
         assertThat(response.getStatus()).isEqualTo("APPROVE");
@@ -387,7 +397,7 @@ class AdjustmentUseCaseTest {
                         .build())
                 .collect(Collectors.toList());
         
-        when(adjustmentRepositoryPort.findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber))
+        when(adjustmentQueryRepositoryPort.findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber))
                 .thenReturn(adjustments);
         when(adjustmentMapper.mapToDto(any(Adjustment.class)))
                 .thenAnswer(invocation -> {
@@ -413,10 +423,10 @@ class AdjustmentUseCaseTest {
                 });
         
         // when
-        List<AdjustmentDto> result = adjustmentUseCase.findByServiceManagementNumber(serviceManagementNumber);
+        List<AdjustmentDto> result = adjustmentQueryUseCase.findByServiceManagementNumber(serviceManagementNumber);
         
         // then
-        verify(adjustmentRepositoryPort).findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber);
+        verify(adjustmentQueryRepositoryPort).findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber);
         verify(adjustmentMapper, times(2)).mapToDto(any(Adjustment.class));
         
         assertThat(result).hasSize(2);
@@ -428,14 +438,14 @@ class AdjustmentUseCaseTest {
     void 조회_서비스관리번호로_조정내역_없는_경우_빈_리스트_반환() {
         // given
         String serviceManagementNumber = "1234567890";
-        when(adjustmentRepositoryPort.findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber))
+        when(adjustmentQueryRepositoryPort.findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber))
                 .thenReturn(List.of());
         
         // when
-        List<AdjustmentDto> result = adjustmentUseCase.findByServiceManagementNumber(serviceManagementNumber);
+        List<AdjustmentDto> result = adjustmentQueryUseCase.findByServiceManagementNumber(serviceManagementNumber);
         
         // then
-        verify(adjustmentRepositoryPort).findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber);
+        verify(adjustmentQueryRepositoryPort).findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber);
         verify(adjustmentMapper, never()).mapToDto(any(Adjustment.class));
         
         assertThat(result).isEmpty();

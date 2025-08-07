@@ -1,5 +1,5 @@
 package com.skt.nova.billing.billcalculation.adjustmentauthorization.api;
 
-public interface AdjustmentAuthorizationPort {
+public interface AdjustmentAuthorizationCommandUseCase {
     AuthorizationResult checkAdjustmentAuthorization(String adjustmentRequestUserId, long adjustmentRequestAmount);
 } 

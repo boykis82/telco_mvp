@@ -8,7 +8,7 @@ import java.util.List;
  * 수납 관리 Query Port 인터페이스
  * 수납 조회 등의 쿼리 작업을 정의합니다.
  */
-public interface PaymentQueryPort {
+public interface PaymentQueryUseCase {
     
     /**
      * 계정번호로 수납 내역 조회

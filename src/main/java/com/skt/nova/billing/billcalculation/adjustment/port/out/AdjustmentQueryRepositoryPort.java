@@ -5,9 +5,8 @@ import java.util.List;
 
 import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
 
-public interface AdjustmentRepositoryPort {
-    public void saveAll(List<Adjustment> adjustments);
-    public List<Adjustment> findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(String serviceManagementNumber);
+public interface AdjustmentQueryRepositoryPort {
+    List<Adjustment> findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(String serviceManagementNumber);
     
     /**
      * adjustmentRequestId로 조정 내역 조회

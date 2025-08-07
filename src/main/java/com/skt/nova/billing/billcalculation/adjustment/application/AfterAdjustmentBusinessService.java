@@ -10,10 +10,7 @@ import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
 import com.skt.nova.billing.billcalculation.adjustment.domain.AdjustmentReasonCode;
 import com.skt.nova.billing.billcalculation.adjustment.domain.AdjustmentStatusCode;
 import com.skt.nova.billing.billcalculation.adjustment.domain.AdjustmentType;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentAuthorizationClientPort;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentRepositoryPort;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.ApprovalClientPort;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.InvoiceClientPort;
+import com.skt.nova.billing.billcalculation.adjustment.port.out.*;
 import com.skt.nova.billing.billcalculation.adjustmentauthorization.api.AuthorizationResult;
 import com.skt.nova.billing.billcalculation.common.exception.BusinessException;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.AdjustmentItemDto;
@@ -37,7 +34,8 @@ public class AfterAdjustmentBusinessService {
     private final AdjustmentAuthorizationClientPort adjustmentAuthorizationClientPort;
     private final ApprovalClientPort approvalClientPort;
     private final InvoiceClientPort invoiceClientPort;
-    private final AdjustmentRepositoryPort adjustmentRepositoryPort;
+    private final AdjustmentQueryRepositoryPort adjustmentQueryRepositoryPort;
+    private final AdjustmentCommandRepositoryPort adjustmentCommandRepositoryPort;
 
     @Transactional
     public AfterAdjustmentResponse processAfterAdjustment(AfterAdjustmentRequest request) {
@@ -84,7 +82,7 @@ public class AfterAdjustmentBusinessService {
         ).collect(Collectors.toList());
 
         // 3. 조정 내역 저장
-        adjustmentRepositoryPort.saveAll(adjustments);
+        adjustmentCommandRepositoryPort.saveAll(adjustments);
 
         // 4. 승인된 경우 과금 조정 적용
         if (authorizationResult == AuthorizationResult.APPROVE) {
@@ -114,7 +112,7 @@ public class AfterAdjustmentBusinessService {
     @Transactional
     public String processAdjustmentRejection(AdjustmentRejectionRequest request) {
         // 1. adjustmentRequestId로 Adjustment 조회
-        List<Adjustment> adjustments = adjustmentRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());        
+        List<Adjustment> adjustments = adjustmentQueryRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());
         if (adjustments.isEmpty()) {
             throw new BusinessException("조정 내역을 찾을 수 없습니다. adjustmentRequestId: " + request.getAdjustmentRequestId());
         }
@@ -132,18 +130,18 @@ public class AfterAdjustmentBusinessService {
         );
         
         // 4. 변경된 Adjustment 저장
-        adjustmentRepositoryPort.saveAll(adjustments);
+        adjustmentCommandRepositoryPort.saveAll(adjustments);
         
         log.info("조정 내역 반려 완료. adjustmentRequestId: {}, rejectUserId: {}", 
                 request.getAdjustmentRequestId(), request.getAdjustmentRejectUserId());
                 
-        return adjustments.get(0).getVocId();
+        return adjustments.getFirst().getVocId();
     }
 
     @Transactional
     public String processAdjustmentApproval(AdjustmentApprovalRequest request) {
         // 1. adjustmentRequestId로 Adjustment 조회
-        List<Adjustment> adjustments = adjustmentRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());        
+        List<Adjustment> adjustments = adjustmentQueryRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());
         if (adjustments.isEmpty()) {
             throw new BusinessException("조정 내역을 찾을 수 없습니다. adjustmentRequestId: " + request.getAdjustmentRequestId());
         }
@@ -161,7 +159,7 @@ public class AfterAdjustmentBusinessService {
         );
         
         // 4. 변경된 Adjustment 저장
-        adjustmentRepositoryPort.saveAll(adjustments);
+        adjustmentCommandRepositoryPort.saveAll(adjustments);
         
         // 5. invoice 패키지의 invoiceUseCase의 applyAdjustment를 호출
         ApplyAdjustmentRequestDto applyRequest = buildApplyAdjustmentRequest(adjustments);
@@ -171,7 +169,7 @@ public class AfterAdjustmentBusinessService {
         log.info("조정 내역 승인 완료. adjustmentRequestId: {}, approveUserId: {}", 
                 request.getAdjustmentRequestId(), request.getAdjustmentApproveUserId());
 
-        return adjustments.get(0).getVocId();
+        return adjustments.getFirst().getVocId();
     }    
 
     @Transactional
@@ -181,10 +179,10 @@ public class AfterAdjustmentBusinessService {
         // 승인자 없이 완료한 경우와 승인자가 승인한 경우를 구분하여 조회
         if (request.getAdjustmentRequestId() != null && !request.getAdjustmentRequestId().isEmpty()) {
             // 승인자가 승인한 후에 취소하는 경우
-            adjustments = adjustmentRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());
+            adjustments = adjustmentQueryRepositoryPort.findByAdjustmentRequestId(request.getAdjustmentRequestId());
         } else {
             // 승인자 없이 완료한 뒤 취소하는 경우
-            adjustments = adjustmentRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
+            adjustments = adjustmentQueryRepositoryPort.findByServiceManagementNumberAndAccountNumberAndAdjustmentRequestDateTime(
                     request.getServiceManagementNumber(),
                     request.getAccountNumber(),
                     request.getAdjustmentRequestDateTime()
@@ -203,10 +201,10 @@ public class AfterAdjustmentBusinessService {
         }
         
         // 2. 조회된 Adjustment들의 adjustmentStatusCode = '취소'로 변경
-        adjustments.forEach(adjustment -> adjustment.cancel());
+        adjustments.forEach(Adjustment::cancel);
         
         // 3. 변경된 Adjustment 저장
-        adjustmentRepositoryPort.saveAll(adjustments);
+        adjustmentCommandRepositoryPort.saveAll(adjustments);
         
         // 4. invoiceCommandPort에 조정취소반영 api 호출
         ApplyAdjustmentRequestDto cancelRequest = buildApplyAdjustmentRequest(adjustments);        

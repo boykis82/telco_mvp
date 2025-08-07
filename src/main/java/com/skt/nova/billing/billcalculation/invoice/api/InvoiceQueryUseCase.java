@@ -5,7 +5,7 @@ import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceSummaryDto;
 import java.time.LocalDate;
 import java.util.List;
 
-public interface InvoiceQueryPort {
+public interface InvoiceQueryUseCase {
     
     /**
      * 계정번호로 청구 정보 요약 조회 (계정번호, 청구일자별 그룹화)

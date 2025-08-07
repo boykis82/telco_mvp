@@ -1,7 +1,7 @@
 package com.skt.nova.billing.billcalculation.payment.adapter.in;
 
-import com.skt.nova.billing.billcalculation.payment.api.PaymentCommandPort;
-import com.skt.nova.billing.billcalculation.payment.api.PaymentQueryPort;
+import com.skt.nova.billing.billcalculation.payment.api.PaymentCommandUseCase;
+import com.skt.nova.billing.billcalculation.payment.api.PaymentQueryUseCase;
 import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentRequestDto;
 import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentResponseDto;
 import com.skt.nova.billing.billcalculation.payment.api.dto.PaymentSummaryDto;
@@ -16,8 +16,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PaymentController {
     
-    private final PaymentCommandPort paymentCommandPort;
-    private final PaymentQueryPort paymentQueryPort;
+    private final PaymentCommandUseCase paymentCommandUseCase;
+    private final PaymentQueryUseCase paymentQueryUseCase;
     
     /**
      * 수납 처리
@@ -26,7 +26,7 @@ public class PaymentController {
      */
     @PostMapping("/")
     public ResponseEntity<List<PaymentResponseDto>> processPayment(@RequestBody PaymentRequestDto paymentRequestDto) {
-        List<PaymentResponseDto> result = paymentCommandPort.processPayment(paymentRequestDto);
+        List<PaymentResponseDto> result = paymentCommandUseCase.processPayment(paymentRequestDto);
         return ResponseEntity.ok(result);
     }
     
@@ -37,7 +37,7 @@ public class PaymentController {
      */
     @GetMapping("/summary/{accountNumber}")
     public ResponseEntity<List<PaymentSummaryDto>> getPaymentSummary(@PathVariable String accountNumber) {
-        List<PaymentSummaryDto> result = paymentQueryPort.findPaymentSummaryByAccountNumber(accountNumber);
+        List<PaymentSummaryDto> result = paymentQueryUseCase.findPaymentSummaryByAccountNumber(accountNumber);
         return ResponseEntity.ok(result);
     }
 } 

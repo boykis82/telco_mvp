@@ -1,7 +1,7 @@
 package com.skt.nova.billing.billcalculation.adjustment.adapter.in;
 
-import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentCommandPort;
-import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentQueryPort;
+import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentCommandUseCase;
+import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentQueryUseCase;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentResponse;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentApprovalRequest;
@@ -24,36 +24,36 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/adjustments")
 @RequiredArgsConstructor
 public class AdjustmentController {
-    private final AdjustmentCommandPort adjustmentCommandPort;
-    private final AdjustmentQueryPort adjustmentQueryPort;
+    private final AdjustmentCommandUseCase adjustmentCommandUseCase;
+    private final AdjustmentQueryUseCase adjustmentQueryUseCase;
     
     @PostMapping("/after")
     public ResponseEntity<AfterAdjustmentResponse> requestAfterAdjustment(@RequestBody AfterAdjustmentRequest request) {
-        AfterAdjustmentResponse response = adjustmentCommandPort.requestAfterAdjustment(request);
+        AfterAdjustmentResponse response = adjustmentCommandUseCase.requestAfterAdjustment(request);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{serviceManagementNumber}")
     public ResponseEntity<List<AdjustmentDto>> findByServiceManagementNumber(@PathVariable String serviceManagementNumber) {
-        List<AdjustmentDto> response = adjustmentQueryPort.findByServiceManagementNumber(serviceManagementNumber);
+        List<AdjustmentDto> response = adjustmentQueryUseCase.findByServiceManagementNumber(serviceManagementNumber);
         return ResponseEntity.ok(response);
     }
     
     @PostMapping("/approve")
     public ResponseEntity<Void> approveAdjustment(@RequestBody AdjustmentApprovalRequest request) {
-        adjustmentCommandPort.approveAdjustment(request);
+        adjustmentCommandUseCase.approveAdjustment(request);
         return ResponseEntity.ok().build();
     }
     
     @PostMapping("/reject")
     public ResponseEntity<Void> rejectAdjustment(@RequestBody AdjustmentRejectionRequest request) {
-        adjustmentCommandPort.rejectAdjustment(request);
+        adjustmentCommandUseCase.rejectAdjustment(request);
         return ResponseEntity.ok().build();
     }
     
     @PostMapping("/cancel")
     public ResponseEntity<Void> cancelAdjustment(@RequestBody AdjustmentCancelRequest request) {
-        adjustmentCommandPort.cancelAdjustment(request);
+        adjustmentCommandUseCase.cancelAdjustment(request);
         return ResponseEntity.ok().build();
     }
 } 

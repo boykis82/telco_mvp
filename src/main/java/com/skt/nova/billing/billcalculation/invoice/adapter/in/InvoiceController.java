@@ -1,8 +1,8 @@
 package com.skt.nova.billing.billcalculation.invoice.adapter.in;
 
+import com.skt.nova.billing.billcalculation.invoice.api.InvoiceQueryUseCase;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceMasterDto;
 import com.skt.nova.billing.billcalculation.invoice.api.dto.InvoiceSummaryDto;
-import com.skt.nova.billing.billcalculation.invoice.application.InvoiceUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +16,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InvoiceController {
     
-    private final InvoiceUseCase invoiceService;
+    private final InvoiceQueryUseCase invoiceQueryUseCase;
     
     /**
      * 계정번호로 청구 정보 요약 조회 (계정번호, 청구일자별 그룹화)
@@ -25,7 +25,7 @@ public class InvoiceController {
      */
     @GetMapping("/account/{accountNumber}/summary")
     public ResponseEntity<List<InvoiceSummaryDto>> getInvoiceSummaryByAccountNumber(@PathVariable String accountNumber) {
-        List<InvoiceSummaryDto> summaries = invoiceService.findInvoiceSummaryByAccountNumber(accountNumber);        
+        List<InvoiceSummaryDto> summaries = invoiceQueryUseCase.findInvoiceSummaryByAccountNumber(accountNumber);
         return ResponseEntity.ok(summaries);
     }
     
@@ -40,7 +40,7 @@ public class InvoiceController {
             @PathVariable String accountNumber,
             @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate billingDate) {
         
-        List<InvoiceMasterDto> invoices = invoiceService.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate);
+        List<InvoiceMasterDto> invoices = invoiceQueryUseCase.findInvoicesByAccountNumberAndBillingDate(accountNumber, billingDate);
         return ResponseEntity.ok(invoices);
     }
 } 

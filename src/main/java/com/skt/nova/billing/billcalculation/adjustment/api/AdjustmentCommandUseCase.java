@@ -10,7 +10,7 @@ import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentCancelR
  * 요금 조정 관리 Command Port 인터페이스
  * 요금 조정 생성, 수정, 삭제 등의 명령 작업을 정의합니다.
  */
-public interface AdjustmentCommandPort {
+public interface AdjustmentCommandUseCase {
     // 요금 조정 관련 명령 작업 메서드들이 정의될 예정
     AfterAdjustmentResponse requestAfterAdjustment(AfterAdjustmentRequest afterAdjustmentRequest);
     

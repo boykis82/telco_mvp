@@ -1,14 +1,11 @@
 package com.skt.nova.billing.billcalculation.adjustment.application;
 
-import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentCommandPort;
-import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentQueryPort;
+import com.skt.nova.billing.billcalculation.adjustment.api.AdjustmentCommandUseCase;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AfterAdjustmentResponse;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentApprovalRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentRejectionRequest;
 import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentCancelRequest;
-import com.skt.nova.billing.billcalculation.adjustment.api.dto.AdjustmentDto;
-import com.skt.nova.billing.billcalculation.adjustment.port.out.AdjustmentRepositoryPort;
 import com.skt.nova.billing.billcalculation.adjustment.port.out.VocSystemPort;
 import com.skt.nova.billing.billcalculation.adjustment.port.out.VocStatusUpdateRequest;
 import lombok.RequiredArgsConstructor;
@@ -17,17 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.stream.Collectors;
-import com.skt.nova.billing.billcalculation.adjustment.domain.Adjustment;
 import com.skt.nova.billing.billcalculation.adjustment.domain.AdjustmentStatusCode;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class AdjustmentUseCase implements AdjustmentCommandPort, AdjustmentQueryPort {
-    private final AdjustmentRepositoryPort adjustmentRepositoryPort;
-    private final AdjustmentDomainDtoMapper adjustmentMapper;
+public class AdjustmentCommandUseCaseImpl implements AdjustmentCommandUseCase {
     private final AfterAdjustmentBusinessService afterAdjustmentBusinessService;
     private final VocSystemPort vocSystemPort;
 
@@ -37,7 +29,7 @@ public class AdjustmentUseCase implements AdjustmentCommandPort, AdjustmentQuery
         AfterAdjustmentResponse response = afterAdjustmentBusinessService.processAfterAdjustment(request);
 
         // 트랜잭션 완료 후 VocSystem 상태 업데이트 (비동기 처리)
-        if (response.getStatus() == AdjustmentStatusCode.APPROVE.name()) {
+        if (response.getStatus().equals(AdjustmentStatusCode.APPROVE.name())) {
             try {
                 VocStatusUpdateRequest vocRequest = VocStatusUpdateRequest.builder()
                         .vocId(request.getVocId())
@@ -102,17 +94,6 @@ public class AdjustmentUseCase implements AdjustmentCommandPort, AdjustmentQuery
             log.error("VocSystem 상태 업데이트 실패: vocId={}, statusCode={}", vocId, e);
             // VocSystem 연동 실패는 후조정 처리에 영향을 주지 않도록 함
         }              
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<AdjustmentDto> findByServiceManagementNumber(String serviceManagementNumber) {
-        List<Adjustment> domains = adjustmentRepositoryPort
-                .findByIdServiceManagementNumberOrderByIdAdjustmentDateDescIdAdjustmentSequenceAsc(serviceManagementNumber);
-        
-        return domains.stream()
-                .map(adjustmentMapper::mapToDto)
-                .collect(Collectors.toList());
     }
 
 } 
